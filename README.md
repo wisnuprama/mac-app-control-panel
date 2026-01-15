@@ -22,8 +22,8 @@ A macOS menu bar application for managing and launching applications and scripts
 
 Download the zip file from [release page](https://github.com/wisnuprama/mac-app-control-panel/releases).
 
-1. Unzip
-2. Copy to `Application` folder.
+1. Unzip the zip file
+2. Copy the `AppControlPanel` to `Application` folder.
 
 ### Using Xcode
 
