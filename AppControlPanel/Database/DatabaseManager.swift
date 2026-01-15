@@ -140,4 +140,22 @@ class DatabaseManager {
         sqlite3_finalize(statement)
         return false
     }
+
+    func appEntryExistsByPath(_ path: String) -> Bool {
+        let querySQL = "SELECT COUNT(*) FROM app_entries WHERE path = ?;"
+        var statement: OpaquePointer?
+
+        if sqlite3_prepare_v2(db, querySQL, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_text(statement, 1, (path as NSString).utf8String, -1, nil)
+
+            if sqlite3_step(statement) == SQLITE_ROW {
+                let count = sqlite3_column_int(statement, 0)
+                sqlite3_finalize(statement)
+                return count > 0
+            }
+        }
+
+        sqlite3_finalize(statement)
+        return false
+    }
 }

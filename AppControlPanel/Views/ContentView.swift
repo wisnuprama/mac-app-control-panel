@@ -14,12 +14,23 @@ struct ContentView: View {
 
                 Spacer()
 
-                Button(action: { showingAddSheet = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
+                HStack(spacing: 12) {
+                    Button(action: { appManager.loadEntries() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                    .help("Refresh List")
+
+                    Button(action: { showingAddSheet = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.blue)
+                    .help("Add Entry")
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(.blue)
             }
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
@@ -163,21 +174,77 @@ struct AppEntryRow: View {
     }
 }
 
+enum AddEntryMode: String, CaseIterable {
+    case manual = "Manual"
+    case keyword = "Keyword Search"
+}
+
 struct AddEntrySheet: View {
     @ObservedObject var appManager: AppManager
     @Binding var isPresented: Bool
 
+    @State private var addMode: AddEntryMode = .manual
     @State private var entryType: AppEntryType = .application
     @State private var name = ""
     @State private var path = ""
     @State private var scriptContent = ""
     @State private var useScriptFile = false
 
+    // Keyword search states
+    @State private var keyword = ""
+    @State private var previewApps: [(name: String, path: String, alreadyExists: Bool)] = []
+    @State private var showingPreview = false
+    @State private var addedCount = 0
+    @State private var showingResult = false
+
     var body: some View {
         VStack(spacing: 16) {
             Text("Add New Entry")
                 .font(.headline)
 
+            Picker("Mode", selection: $addMode) {
+                ForEach(AddEntryMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: addMode) { _ in
+                // Reset states when switching modes
+                showingPreview = false
+                showingResult = false
+            }
+
+            if addMode == .manual {
+                manualEntryView
+            } else {
+                keywordSearchView
+            }
+
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+
+                Spacer()
+
+                if addMode == .manual {
+                    Button("Add") {
+                        addEntry()
+                    }
+                    .disabled(name.isEmpty || (entryType == .application && path.isEmpty) || (entryType == .script && !useScriptFile && scriptContent.isEmpty) || (entryType == .script && useScriptFile && path.isEmpty))
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .padding()
+        .frame(width: 450, height: addMode == .keyword && showingPreview ? 500 : 350)
+        .animation(.easeInOut(duration: 0.2), value: showingPreview)
+    }
+
+    // MARK: - Manual Entry View
+
+    private var manualEntryView: some View {
+        VStack(spacing: 12) {
             Picker("Type", selection: $entryType) {
                 Text("Application").tag(AppEntryType.application)
                 Text("Script").tag(AppEntryType.script)
@@ -221,24 +288,126 @@ struct AddEntrySheet: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Keyword Search View
+
+    private var keywordSearchView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Search for applications in /Applications folder that contain the keyword (case-insensitive).")
+                .font(.caption)
+                .foregroundColor(.secondary)
 
             HStack {
-                Button("Cancel") {
-                    isPresented = false
-                }
+                TextField("Enter keyword (e.g., 'chrome', 'code')", text: $keyword)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        previewMatches()
+                    }
 
-                Spacer()
-
-                Button("Add") {
-                    addEntry()
+                Button("Search") {
+                    previewMatches()
                 }
-                .disabled(name.isEmpty || (entryType == .application && path.isEmpty) || (entryType == .script && !useScriptFile && scriptContent.isEmpty) || (entryType == .script && useScriptFile && path.isEmpty))
-                .buttonStyle(.borderedProminent)
+                .disabled(keyword.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            // Preview Results
+            if showingPreview {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Matching Apps")
+                            .font(.caption)
+                            .fontWeight(.medium)
+
+                        Spacer()
+
+                        Text("\(previewApps.count) found")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if previewApps.isEmpty {
+                        Text("No applications found matching '\(keyword)'")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 8)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 4) {
+                                ForEach(previewApps, id: \.path) { app in
+                                    HStack {
+                                        Image(systemName: "app.fill")
+                                            .foregroundColor(.blue)
+                                            .font(.caption)
+
+                                        Text(app.name)
+                                            .font(.caption)
+                                            .lineLimit(1)
+
+                                        Spacer()
+
+                                        if app.alreadyExists {
+                                            Text("Already added")
+                                                .font(.caption2)
+                                                .foregroundColor(.orange)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.orange.opacity(0.1))
+                                                .cornerRadius(4)
+                                        } else {
+                                            Text("New")
+                                                .font(.caption2)
+                                                .foregroundColor(.green)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.1))
+                                                .cornerRadius(4)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 150)
+
+                        let newAppsCount = previewApps.filter { !$0.alreadyExists }.count
+
+                        Button(action: addMatchingApps) {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Add \(newAppsCount) New App\(newAppsCount == 1 ? "" : "s")")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(newAppsCount == 0)
+                    }
+                }
+                .padding()
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(8)
+            }
+
+            // Result Message
+            if showingResult {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("\(addedCount) app\(addedCount == 1 ? "" : "s") added successfully!")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                .padding(8)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(6)
             }
         }
-        .padding()
-        .frame(width: 400)
     }
+
+    // MARK: - Actions
 
     private func selectApplication() {
         let panel = NSOpenPanel()
@@ -279,6 +448,31 @@ struct AddEntrySheet: View {
         let entry = AppEntry(name: name, path: entryPath, type: entryType)
         appManager.addEntry(entry)
         isPresented = false
+    }
+
+    private func previewMatches() {
+        let trimmedKeyword = keyword.trimmingCharacters(in: .whitespaces)
+        guard !trimmedKeyword.isEmpty else { return }
+
+        previewApps = appManager.previewAppsForKeyword(trimmedKeyword)
+        showingPreview = true
+        showingResult = false
+    }
+
+    private func addMatchingApps() {
+        let trimmedKeyword = keyword.trimmingCharacters(in: .whitespaces)
+        guard !trimmedKeyword.isEmpty else { return }
+
+        addedCount = appManager.addAppsMatchingKeyword(trimmedKeyword)
+        showingResult = true
+
+        // Update preview to reflect changes
+        previewApps = appManager.previewAppsForKeyword(trimmedKeyword)
+
+        // Auto-hide result after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            showingResult = false
+        }
     }
 }
 

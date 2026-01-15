@@ -111,4 +111,90 @@ class AppManager: ObservableObject {
             $0.localizedName == appName || $0.bundleURL?.path == entry.path
         }
     }
+
+    // MARK: - Auto-add Apps by Keyword
+
+    /// Scans the Applications folder and adds apps matching the keyword
+    /// - Parameter keyword: The keyword to match (case-insensitive, partial match)
+    /// - Returns: Number of apps added
+    @discardableResult
+    func addAppsMatchingKeyword(_ keyword: String) -> Int {
+        let matchingApps = findAppsMatchingKeyword(keyword)
+        var addedCount = 0
+
+        for appURL in matchingApps {
+            let appPath = appURL.path
+
+            // Check if app already exists in database
+            if !databaseManager.appEntryExistsByPath(appPath) {
+                let appName = appURL.deletingPathExtension().lastPathComponent
+                let entry = AppEntry(name: appName, path: appPath, type: .application)
+
+                if let id = databaseManager.insertAppEntry(entry) {
+                    var newEntry = entry
+                    newEntry.id = id
+                    appEntries.insert(newEntry, at: 0)
+                    addedCount += 1
+                }
+            }
+        }
+
+        return addedCount
+    }
+
+    /// Finds all applications in the Applications folder matching the keyword
+    /// - Parameter keyword: The keyword to match (case-insensitive, partial match)
+    /// - Returns: Array of URLs for matching applications
+    func findAppsMatchingKeyword(_ keyword: String) -> [URL] {
+        let fileManager = FileManager.default
+        var matchingApps: [URL] = []
+
+        // Search in main Applications folder
+        let applicationsPaths = [
+            "/Applications",
+            NSHomeDirectory() + "/Applications"
+        ]
+
+        let lowercasedKeyword = keyword.lowercased()
+
+        for applicationsPath in applicationsPaths {
+            let applicationsURL = URL(fileURLWithPath: applicationsPath)
+
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: applicationsURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else {
+                continue
+            }
+
+            for itemURL in contents {
+                // Check if it's an application bundle
+                if itemURL.pathExtension.lowercased() == "app" {
+                    let appName = itemURL.deletingPathExtension().lastPathComponent.lowercased()
+
+                    // Case-insensitive partial match
+                    if appName.contains(lowercasedKeyword) {
+                        matchingApps.append(itemURL)
+                    }
+                }
+            }
+        }
+
+        return matchingApps
+    }
+
+    /// Preview apps that would be added for a keyword without actually adding them
+    /// - Parameter keyword: The keyword to match
+    /// - Returns: Array of app names that would be added
+    func previewAppsForKeyword(_ keyword: String) -> [(name: String, path: String, alreadyExists: Bool)] {
+        let matchingApps = findAppsMatchingKeyword(keyword)
+
+        return matchingApps.map { appURL in
+            let appName = appURL.deletingPathExtension().lastPathComponent
+            let appPath = appURL.path
+            let exists = databaseManager.appEntryExistsByPath(appPath)
+            return (name: appName, path: appPath, alreadyExists: exists)
+        }
+    }
 }
