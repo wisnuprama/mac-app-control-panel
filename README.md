@@ -8,7 +8,8 @@ A macOS menu bar application for managing and launching applications and scripts
 - **Application Management**: Add, remove, and launch applications from a convenient panel
 - **Script Support**: Run bash scripts directly from the panel (inline scripts or script files)
 - **Force Kill**: Force terminate running applications
-- **Persistent Storage**: Uses SQLite database to store your app/script entries
+
+![App Screenshot](screenshots/App.png)
 
 ## Requirements
 
@@ -16,6 +17,13 @@ A macOS menu bar application for managing and launching applications and scripts
 - Xcode 15.0 or later
 
 ## Installation
+
+### Download
+
+Download the zip file from [release page](https://github.com/wisnuprama/mac-app-control-panel/releases).
+
+1. Unzip
+2. Copy to `Application` folder.
 
 ### Using Xcode
 
@@ -89,6 +97,7 @@ AppControlPanel/
 ## Database
 
 The app stores data in SQLite at:
+
 ```
 ~/Library/Application Support/AppControlPanel/app_data.sqlite
 ```
